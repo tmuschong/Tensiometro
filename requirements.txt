@@ -1,3 +1,7 @@
 flask
 gunicorn
+matplotlib
+random
+io
+base64
 
