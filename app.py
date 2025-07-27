@@ -25,8 +25,8 @@ def generar_grafico(titulo, valores):
 @app.route("/")
 def home():
     # Simulamos 10 lecturas aleatorias
-    sistolica = [random.randint(110, 140) for _ in range(10)]
-    diastolica = [random.randint(70, 90) for _ in range(10)]
+    sistolica = [random.randint(110, 140) for _ in range(72)]
+    diastolica = [random.randint(70, 90) for _ in range(72)]
 
     img_sis = generar_grafico("Presión Sistólica", sistolica)
     img_dia = generar_grafico("Presión Diastólica", diastolica)
