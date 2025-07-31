@@ -6,63 +6,71 @@ import base64
 
 app = Flask(__name__)
 
-# Función para generar una imagen de gráfico en base64
+# Función para generar imagen de gráfico en base64
 def generar_grafico(titulo, valores):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(12, 4))  # más ancho
     ax.plot(valores, marker='o')
     ax.set_title(titulo)
     ax.set_ylabel("Presión (mmHg)")
-    ax.set_xlabel("Tiempo")
+    ax.set_xlabel("Medición")
 
-    # Convertimos el gráfico en imagen base64
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
     buf.seek(0)
-    imagen_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return imagen_base64
+    return base64.b64encode(buf.read()).decode('utf-8')
 
 @app.route("/")
 def home():
-    # Simulamos 72 lecturas aleatorias
+    # Simulamos lecturas
     sistolica = [random.randint(110, 140) for _ in range(72)]
     diastolica = [random.randint(70, 90) for _ in range(72)]
 
     img_sis = generar_grafico("Presión Sistólica", sistolica)
     img_dia = generar_grafico("Presión Diastólica", diastolica)
 
-    # Plantilla HTML
     html = """
     <html>
     <head>
-        <title>Presiones Arteriales</title>
+        <title>Monitor de Presión</title>
         <style>
-            .contenedor {
-                display: flex;
-                flex-direction: row;
-                align-items: flex-start;
+            body {
+                font-family: Arial, sans-serif;
+                padding: 20px;
+                background-color: #f9f9f9;
             }
-            .graficos {
-                flex: 1;
-                padding: 10px;
+            .contenedor {
+                max-width: 1200px;
+                margin: auto;
+            }
+            .graficos img {
+                display: block;
+                width: 100%;
+                margin-bottom: 30px;
+                border: 1px solid #ccc;
+                box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
             }
             .tabla {
-                flex: 1;
-                padding: 10px;
+                margin-top: 40px;
+                overflow-x: auto;
             }
-            table, th, td {
-                border: 1px solid black;
+            table {
+                width: 100%;
                 border-collapse: collapse;
-                padding: 5px;
+            }
+            th, td {
+                border: 1px solid #ccc;
+                padding: 6px 8px;
+                text-align: center;
             }
             th {
-                background-color: #f2f2f2;
+                background-color: #e0e0e0;
             }
         </style>
     </head>
     <body>
-        <h1>Monitor de Presión Arterial</h1>
         <div class="contenedor">
+            <h1>Monitor de Presión Arterial</h1>
             <div class="graficos">
                 <h2>Presión Sistólica</h2>
                 <img src="data:image/png;base64,{{img_sis}}">
@@ -70,7 +78,7 @@ def home():
                 <img src="data:image/png;base64,{{img_dia}}">
             </div>
             <div class="tabla">
-                <h2>Valores Numéricos</h2>
+                <h2>Tabla de Mediciones</h2>
                 <table>
                     <tr>
                         <th>#</th>
@@ -90,10 +98,11 @@ def home():
     </body>
     </html>
     """
-    # Combinamos los valores para usarlos en la tabla
+
     valores = list(zip(sistolica, diastolica))
     return render_template_string(html, img_sis=img_sis, img_dia=img_dia, valores=valores)
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
