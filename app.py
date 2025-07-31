@@ -6,90 +6,111 @@ import base64
 
 app = Flask(__name__)
 
-# Función para generar imagen de gráfico en base64
+# Función para generar una imagen de gráfico en base64
 def generar_grafico(titulo, valores):
-    fig, ax = plt.subplots(figsize=(12, 4))  # más ancho
+    fig, ax = plt.subplots(figsize=(10, 4))  # Más ancho (doble)
     ax.plot(valores, marker='o')
     ax.set_title(titulo)
     ax.set_ylabel("Presión (mmHg)")
-    ax.set_xlabel("Medición")
+    ax.set_xlabel("Tiempo")
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
     buf.seek(0)
-    return base64.b64encode(buf.read()).decode('utf-8')
+    imagen_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return imagen_base64
 
 @app.route("/")
 def home():
-    # Simulamos lecturas
+    # Simulamos 72 mediciones
     sistolica = [random.randint(110, 140) for _ in range(72)]
     diastolica = [random.randint(70, 90) for _ in range(72)]
+    mediciones = list(range(1, 73))  # Números de medición
 
     img_sis = generar_grafico("Presión Sistólica", sistolica)
     img_dia = generar_grafico("Presión Diastólica", diastolica)
 
+    # Plantilla HTML con estilos
     html = """
     <html>
     <head>
-        <title>Monitor de Presión</title>
+        <title>Presiones Arteriales</title>
         <style>
             body {
                 font-family: Arial, sans-serif;
-                padding: 20px;
-                background-color: #f9f9f9;
+                margin: 30px;
             }
             .contenedor {
-                max-width: 1200px;
+                max-width: 1000px;
                 margin: auto;
             }
-            .graficos img {
-                display: block;
-                width: 100%;
-                margin-bottom: 30px;
-                border: 1px solid #ccc;
-                box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+            .datos-paciente {
+                font-size: 0.9em;
+                color: #333;
+                margin-bottom: 20px;
+                line-height: 1.4em;
+            }
+            .graficos {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 30px;
+                margin-bottom: 40px;
             }
             .tabla {
-                margin-top: 40px;
+                margin-top: 20px;
                 overflow-x: auto;
             }
             table {
-                width: 100%;
                 border-collapse: collapse;
+                width: 100%;
             }
             th, td {
-                border: 1px solid #ccc;
-                padding: 6px 8px;
+                border: 1px solid #888;
+                padding: 6px 10px;
                 text-align: center;
+                font-size: 0.9em;
             }
             th {
-                background-color: #e0e0e0;
+                background-color: #eee;
             }
         </style>
     </head>
     <body>
         <div class="contenedor">
+            <div class="datos-paciente">
+                <p><strong>Datos del paciente:</strong></p>
+                <p>Nombre: Pepe</p>
+                <p>Apellido: Pepito</p>
+                <p>DNI: 12.345.678</p>
+                <p>Edad: 71</p>
+                <p>Tiempo de muestreo (min): 20</p>
+            </div>
             <h1>Monitor de Presión Arterial</h1>
             <div class="graficos">
-                <h2>Presión Sistólica</h2>
-                <img src="data:image/png;base64,{{img_sis}}">
-                <h2>Presión Diastólica</h2>
-                <img src="data:image/png;base64,{{img_dia}}">
+                <div>
+                    <h2>Presión Sistólica</h2>
+                    <img src="data:image/png;base64,{{img_sis}}">
+                </div>
+                <div>
+                    <h2>Presión Diastólica</h2>
+                    <img src="data:image/png;base64,{{img_dia}}">
+                </div>
             </div>
             <div class="tabla">
-                <h2>Tabla de Mediciones</h2>
+                <h2>Valores numéricos</h2>
                 <table>
                     <tr>
-                        <th>#</th>
-                        <th>Sistólica</th>
-                        <th>Diastólica</th>
+                        <th>Medición</th>
+                        <th>Sistólica (mmHg)</th>
+                        <th>Diastólica (mmHg)</th>
                     </tr>
-                    {% for i in range(valores|length) %}
+                    {% for i in range(72) %}
                     <tr>
                         <td>{{ i+1 }}</td>
-                        <td>{{ valores[i][0] }}</td>
-                        <td>{{ valores[i][1] }}</td>
+                        <td>{{ sistolica[i] }}</td>
+                        <td>{{ diastolica[i] }}</td>
                     </tr>
                     {% endfor %}
                 </table>
@@ -98,11 +119,8 @@ def home():
     </body>
     </html>
     """
-
-    valores = list(zip(sistolica, diastolica))
-    return render_template_string(html, img_sis=img_sis, img_dia=img_dia, valores=valores)
+    return render_template_string(html, img_sis=img_sis, img_dia=img_dia, sistolica=sistolica, diastolica=diastolica)
 
 if __name__ == "__main__":
     app.run(debug=True)
-
 
