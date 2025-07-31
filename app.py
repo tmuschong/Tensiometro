@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string
+from flask import Flask, request, render_template_string
 import random
 import matplotlib.pyplot as plt
 import io
@@ -6,121 +6,136 @@ import base64
 
 app = Flask(__name__)
 
-# Función para generar una imagen de gráfico en base64
 def generar_grafico(titulo, valores):
-    fig, ax = plt.subplots(figsize=(10, 4))  # Más ancho (doble)
+    fig, ax = plt.subplots(figsize=(10, 3))  # Más largo en eje X
     ax.plot(valores, marker='o')
     ax.set_title(titulo)
     ax.set_ylabel("Presión (mmHg)")
     ax.set_xlabel("Tiempo")
-
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
     buf.seek(0)
-    imagen_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return imagen_base64
+    return base64.b64encode(buf.read()).decode('utf-8')
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def home():
-    # Simulamos 72 mediciones
-    sistolica = [random.randint(110, 140) for _ in range(72)]
-    diastolica = [random.randint(70, 90) for _ in range(72)]
-    mediciones = list(range(1, 73))  # Números de medición
+    if request.method == "POST":
+        # Obtener datos del formulario
+        nombre = request.form.get("nombre", "N/A")
+        apellido = request.form.get("apellido", "N/A")
+        dni = request.form.get("dni", "N/A")
+        edad = request.form.get("edad", "N/A")
+        tiempo = request.form.get("tiempo", "N/A")
 
-    img_sis = generar_grafico("Presión Sistólica", sistolica)
-    img_dia = generar_grafico("Presión Diastólica", diastolica)
+        # Simular mediciones
+        sistolica = [random.randint(110, 140) for _ in range(72)]
+        diastolica = [random.randint(70, 90) for _ in range(72)]
 
-    # Plantilla HTML con estilos
-    html = """
+        img_sis = generar_grafico("Presión Sistólica", sistolica)
+        img_dia = generar_grafico("Presión Diastólica", diastolica)
+
+        # Crear filas para la tabla
+        filas = "".join(
+            f"<tr><td>{i+1}</td><td>{s}</td><td>{d}</td></tr>"
+            for i, (s, d) in enumerate(zip(sistolica, diastolica))
+        )
+
+        html = f"""
+        <html>
+        <head>
+            <title>Informe de Presión</title>
+            <style>
+                body {{ font-family: Arial; margin: 20px; }}
+                .datos {{ font-size: 0.9em; text-align: left; margin-bottom: 20px; }}
+                .graficos {{ display: flex; flex-direction: column; align-items: center; }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }}
+                th, td {{
+                    border: 1px solid #ccc;
+                    padding: 6px;
+                    text-align: center;
+                }}
+                th {{ background-color: #f2f2f2; }}
+            </style>
+        </head>
+        <body>
+            <div class="datos">
+                <strong>Datos del paciente:</strong><br>
+                Nombre: {nombre}<br>
+                Apellido: {apellido}<br>
+                DNI: {dni}<br>
+                Edad: {edad}<br>
+                Tiempo de muestreo (min): {tiempo}
+            </div>
+
+            <div class="graficos">
+                <h2>Presión Sistólica</h2>
+                <img src="data:image/png;base64,{img_sis}">
+
+                <h2>Presión Diastólica</h2>
+                <img src="data:image/png;base64,{img_dia}">
+            </div>
+
+            <table>
+                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th></tr>
+                {filas}
+            </table>
+
+            <br><a href="/">Volver</a>
+        </body>
+        </html>
+        """
+        return html
+
+    # Si es GET, mostrar el formulario
+    return """
     <html>
     <head>
-        <title>Presiones Arteriales</title>
+        <title>Datos del Paciente</title>
         <style>
-            body {
-                font-family: Arial, sans-serif;
-                margin: 30px;
-            }
-            .contenedor {
-                max-width: 1000px;
-                margin: auto;
-            }
-            .datos-paciente {
-                font-size: 0.9em;
-                color: #333;
-                margin-bottom: 20px;
-                line-height: 1.4em;
-            }
-            .graficos {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 30px;
-                margin-bottom: 40px;
-            }
-            .tabla {
-                margin-top: 20px;
-                overflow-x: auto;
-            }
-            table {
-                border-collapse: collapse;
+            body { font-family: Arial; margin: 40px; }
+            form { max-width: 400px; }
+            label { display: block; margin-top: 10px; }
+            input[type="text"], input[type="number"] {
                 width: 100%;
+                padding: 6px;
+                margin-top: 4px;
             }
-            th, td {
-                border: 1px solid #888;
-                padding: 6px 10px;
-                text-align: center;
-                font-size: 0.9em;
-            }
-            th {
-                background-color: #eee;
+            input[type="submit"] {
+                margin-top: 20px;
+                padding: 10px 20px;
             }
         </style>
     </head>
     <body>
-        <div class="contenedor">
-            <div class="datos-paciente">
-                <p><strong>Datos del paciente:</strong></p>
-                <p>Nombre: Pepe</p>
-                <p>Apellido: Pepito</p>
-                <p>DNI: 12.345.678</p>
-                <p>Edad: 71</p>
-                <p>Tiempo de muestreo (min): 20</p>
-            </div>
-            <h1>Monitor de Presión Arterial</h1>
-            <div class="graficos">
-                <div>
-                    <h2>Presión Sistólica</h2>
-                    <img src="data:image/png;base64,{{img_sis}}">
-                </div>
-                <div>
-                    <h2>Presión Diastólica</h2>
-                    <img src="data:image/png;base64,{{img_dia}}">
-                </div>
-            </div>
-            <div class="tabla">
-                <h2>Valores numéricos</h2>
-                <table>
-                    <tr>
-                        <th>Medición</th>
-                        <th>Sistólica (mmHg)</th>
-                        <th>Diastólica (mmHg)</th>
-                    </tr>
-                    {% for i in range(72) %}
-                    <tr>
-                        <td>{{ i+1 }}</td>
-                        <td>{{ sistolica[i] }}</td>
-                        <td>{{ diastolica[i] }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
-            </div>
-        </div>
+        <h2>Ingresar datos del paciente</h2>
+        <form method="POST">
+            <label>Nombre:
+                <input type="text" name="nombre" required>
+            </label>
+            <label>Apellido:
+                <input type="text" name="apellido" required>
+            </label>
+            <label>DNI:
+                <input type="text" name="dni" required>
+            </label>
+            <label>Edad:
+                <input type="number" name="edad" required>
+            </label>
+            <label>Tiempo de muestreo (min):
+                <input type="number" name="tiempo" required>
+            </label>
+            <input type="submit" value="Ingresar datos del paciente">
+        </form>
     </body>
     </html>
     """
-    return render_template_string(html, img_sis=img_sis, img_dia=img_dia, sistolica=sistolica, diastolica=diastolica)
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
