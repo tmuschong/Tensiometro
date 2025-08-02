@@ -50,17 +50,18 @@ def home():
             f.write(base64.b64decode(img_dia))
 
         # Guardar los datos para exportar en PDF usando g (global context)
-        g.datos_pdf = {
-            "nombre": nombre,
-            "apellido": apellido,
-            "dni": dni,
-            "edad": edad,
-            "tiempo": tiempo,
-            "sistolica": sistolica,
-            "diastolica": diastolica,
-            "img_sis": tempfile_sis.name,
-            "img_dia": tempfile_dia.name
-        }
+    <form action="/exportar_pdf" method="post">
+        <input type="hidden" name="nombre" value="{nombre}">
+        <input type="hidden" name="apellido" value="{apellido}">
+        <input type="hidden" name="dni" value="{dni}">
+        <input type="hidden" name="edad" value="{edad}">
+        <input type="hidden" name="tiempo" value="{tiempo}">
+        <input type="hidden" name="sistolica" value="{','.join(map(str, sistolica))}">
+        <input type="hidden" name="diastolica" value="{','.join(map(str, diastolica))}">
+        <input type="hidden" name="img_sis" value="{img_sis}">
+        <input type="hidden" name="img_dia" value="{img_dia}">
+        <button type="submit">Exportar a PDF</button>
+    </form>
 
         # Crear filas para la tabla HTML
         filas = "".join(
@@ -173,34 +174,50 @@ def exportar_pdf():
     styles = getSampleStyleSheet()
     elementos = []
 
-    datos = g.get("datos_pdf", None)
-    if not datos:
-        return "No hay datos para exportar", 400
+    # Leer datos del formulario
+    nombre = request.form.get("nombre")
+    apellido = request.form.get("apellido")
+    dni = request.form.get("dni")
+    edad = request.form.get("edad")
+    tiempo = request.form.get("tiempo")
+
+    sistolica = list(map(int, request.form.get("sistolica").split(',')))
+    diastolica = list(map(int, request.form.get("diastolica").split(',')))
+
+    img_sis_b64 = request.form.get("img_sis")
+    img_dia_b64 = request.form.get("img_dia")
+
+    # Guardar imágenes temporales para reportlab
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f_sis, \
+         tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f_dia:
+        f_sis.write(base64.b64decode(img_sis_b64))
+        f_dia.write(base64.b64decode(img_dia_b64))
+        ruta_sis = f_sis.name
+        ruta_dia = f_dia.name
 
     elementos.append(Paragraph("Informe de Presión Arterial", styles['Title']))
     elementos.append(Spacer(1, 12))
 
     info = f"""
-    <b>Nombre:</b> {datos['nombre']}<br/>
-    <b>Apellido:</b> {datos['apellido']}<br/>
-    <b>DNI:</b> {datos['dni']}<br/>
-    <b>Edad:</b> {datos['edad']}<br/>
-    <b>Tiempo de muestreo:</b> {datos['tiempo']} min
+    <b>Nombre:</b> {nombre}<br/>
+    <b>Apellido:</b> {apellido}<br/>
+    <b>DNI:</b> {dni}<br/>
+    <b>Edad:</b> {edad}<br/>
+    <b>Tiempo de muestreo:</b> {tiempo} min
     """
     elementos.append(Paragraph(info, styles['Normal']))
     elementos.append(Spacer(1, 12))
 
     elementos.append(Paragraph("Gráfico Presión Sistólica", styles['Heading2']))
-    elementos.append(RLImage(datos['img_sis'], width=400, height=150))
+    elementos.append(RLImage(ruta_sis, width=400, height=150))
     elementos.append(Spacer(1, 12))
 
     elementos.append(Paragraph("Gráfico Presión Diastólica", styles['Heading2']))
-    elementos.append(RLImage(datos['img_dia'], width=400, height=150))
+    elementos.append(RLImage(ruta_dia, width=400, height=150))
     elementos.append(Spacer(1, 12))
 
-    # Crear tabla con datos
     tabla_datos = [["N°", "Sistólica", "Diastólica"]]
-    for i, (s, d) in enumerate(zip(datos["sistolica"], datos["diastolica"])):
+    for i, (s, d) in enumerate(zip(sistolica, diastolica)):
         tabla_datos.append([str(i+1), str(s), str(d)])
 
     t = Table(tabla_datos, repeatRows=1)
@@ -209,7 +226,6 @@ def exportar_pdf():
     doc.build(elementos)
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name="informe_presion.pdf", mimetype='application/pdf')
-
 
 if __name__ == "__main__":
     app.run(debug=True)
