@@ -1,15 +1,17 @@
-from flask import Flask, render_template_string, request, send_file
+from flask import Flask, request, render_template_string, send_file, g
 import random
 import matplotlib.pyplot as plt
 import io
 import base64
-from fpdf import FPDF
 import tempfile
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
 
 def generar_grafico(titulo, valores):
-    fig, ax = plt.subplots(figsize=(10, 4))  # Más largo
+    fig, ax = plt.subplots(figsize=(10, 3))  # Más largo en eje X
     ax.plot(valores, marker='o')
     ax.set_title(titulo)
     ax.set_ylabel("Presión (mmHg)")
@@ -18,148 +20,196 @@ def generar_grafico(titulo, valores):
     plt.savefig(buf, format='png')
     plt.close(fig)
     buf.seek(0)
-    return base64.b64encode(buf.read()).decode('utf-8'), buf
+    return base64.b64encode(buf.read()).decode('utf-8')
 
 @app.route("/", methods=["GET", "POST"])
 def home():
-    datos = {
-        "nombre": "Pepe",
-        "apellido": "Pepito",
-        "dni": "12.345.678",
-        "edad": "71",
-        "tiempo": "20"
-    }
-
     if request.method == "POST":
-        for campo in datos:
-            datos[campo] = request.form.get(campo)
+        # Obtener datos del formulario
+        nombre = request.form.get("nombre", "N/A")
+        apellido = request.form.get("apellido", "N/A")
+        dni = request.form.get("dni", "N/A")
+        edad = request.form.get("edad", "N/A")
+        tiempo = request.form.get("tiempo", "N/A")
 
-    sistolica = [random.randint(110, 140) for _ in range(72)]
-    diastolica = [random.randint(70, 90) for _ in range(72)]
+        # Simular mediciones
+        sistolica = [random.randint(110, 140) for _ in range(72)]
+        diastolica = [random.randint(70, 90) for _ in range(72)]
 
-    img_sis_base64, img_sis_buffer = generar_grafico("Presión Sistólica", sistolica)
-    img_dia_base64, img_dia_buffer = generar_grafico("Presión Diastólica", diastolica)
+        img_sis = generar_grafico("Presión Sistólica", sistolica)
+        img_dia = generar_grafico("Presión Diastólica", diastolica)
 
-    tabla_datos = [(i + 1, sistolica[i], diastolica[i]) for i in range(72)]
+        # Guardar imágenes en archivos temporales para el PDF
+        tempfile_sis = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        tempfile_dia = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
 
-    html = """
+        with open(tempfile_sis.name, 'wb') as f:
+            f.write(base64.b64decode(img_sis))
+
+        with open(tempfile_dia.name, 'wb') as f:
+            f.write(base64.b64decode(img_dia))
+
+        # Guardar los datos para exportar en PDF usando g (global context)
+        g.datos_pdf = {
+            "nombre": nombre,
+            "apellido": apellido,
+            "dni": dni,
+            "edad": edad,
+            "tiempo": tiempo,
+            "sistolica": sistolica,
+            "diastolica": diastolica,
+            "img_sis": tempfile_sis.name,
+            "img_dia": tempfile_dia.name
+        }
+
+        # Crear filas para la tabla HTML
+        filas = "".join(
+            f"<tr><td>{i+1}</td><td>{s}</td><td>{d}</td></tr>"
+            for i, (s, d) in enumerate(zip(sistolica, diastolica))
+        )
+
+        html = f"""
+        <html>
+        <head>
+            <title>Informe de Presión</title>
+            <style>
+                body {{ font-family: Arial; margin: 20px; }}
+                .datos {{ font-size: 0.9em; text-align: left; margin-bottom: 20px; }}
+                .graficos {{ display: flex; flex-direction: column; align-items: center; }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }}
+                th, td {{
+                    border: 1px solid #ccc;
+                    padding: 6px;
+                    text-align: center;
+                }}
+                th {{ background-color: #f2f2f2; }}
+            </style>
+        </head>
+        <body>
+            <div class="datos">
+                <strong>Datos del paciente:</strong><br>
+                Nombre: {nombre}<br>
+                Apellido: {apellido}<br>
+                DNI: {dni}<br>
+                Edad: {edad}<br>
+                Tiempo de muestreo (min): {tiempo}
+            </div>
+
+            <div class="graficos">
+                <h2>Presión Sistólica</h2>
+                <img src="data:image/png;base64,{img_sis}">
+
+                <h2>Presión Diastólica</h2>
+                <img src="data:image/png;base64,{img_dia}">
+            </div>
+
+            <table>
+                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th></tr>
+                {filas}
+            </table>
+
+            <br>
+            <form action="/exportar_pdf" method="post">
+                <button type="submit">Exportar a PDF</button>
+            </form>
+            <br><a href="/">Volver</a>
+        </body>
+        </html>
+        """
+        return html
+
+    # Si es GET, mostrar el formulario
+    return """
     <html>
     <head>
-        <title>Informe de Presión</title>
+        <title>Datos del Paciente</title>
         <style>
-            body { font-family: Arial; margin: 30px; }
-            .formulario input { margin: 5px; padding: 5px; width: 200px; }
-            .formulario button { margin: 10px; padding: 5px 10px; }
-            .paciente-info { font-size: 14px; margin-bottom: 20px; text-align: left; }
-            .grafico { width: 48%; display: inline-block; vertical-align: top; }
-            .tabla { margin-top: 40px; }
-            table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-            th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-            th { background-color: #f2f2f2; }
+            body { font-family: Arial; margin: 40px; }
+            form { max-width: 400px; }
+            label { display: block; margin-top: 10px; }
+            input[type="text"], input[type="number"] {
+                width: 100%;
+                padding: 6px;
+                margin-top: 4px;
+            }
+            input[type="submit"] {
+                margin-top: 20px;
+                padding: 10px 20px;
+            }
         </style>
     </head>
     <body>
-        <form class="formulario" method="post">
-            <input name="nombre" placeholder="Nombre" value="{{datos.nombre}}">
-            <input name="apellido" placeholder="Apellido" value="{{datos.apellido}}">
-            <input name="dni" placeholder="DNI" value="{{datos.dni}}">
-            <input name="edad" placeholder="Edad" value="{{datos.edad}}">
-            <input name="tiempo" placeholder="Tiempo (min)" value="{{datos.tiempo}}">
-            <button type="submit">Ingresar datos del paciente</button>
-        </form>
-
-        <div class="paciente-info">
-            <strong>Datos del paciente:</strong><br>
-            Nombre: {{datos.nombre}}<br>
-            Apellido: {{datos.apellido}}<br>
-            DNI: {{datos.dni}}<br>
-            Edad: {{datos.edad}}<br>
-            Tiempo de muestreo (min): {{datos.tiempo}}<br>
-        </div>
-
-        <div>
-            <div class="grafico">
-                <h3>Presión Sistólica</h3>
-                <img src="data:image/png;base64,{{img_sis}}">
-            </div>
-            <div class="grafico">
-                <h3>Presión Diastólica</h3>
-                <img src="data:image/png;base64,{{img_dia}}">
-            </div>
-        </div>
-
-        <div class="tabla">
-            <h3>Datos de las mediciones</h3>
-            <table>
-                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th></tr>
-                {% for i, sis, dia in tabla_datos %}
-                    <tr><td>{{i}}</td><td>{{sis}}</td><td>{{dia}}</td></tr>
-                {% endfor %}
-            </table>
-        </div>
-
-        <form action="/descargar_pdf" method="post">
-            {% for key, value in datos.items() %}
-                <input type="hidden" name="{{key}}" value="{{value}}">
-            {% endfor %}
-            <input type="hidden" name="img_sis" value="{{img_sis}}">
-            <input type="hidden" name="img_dia" value="{{img_dia}}">
-            {% for i, sis, dia in tabla_datos %}
-                <input type="hidden" name="tabla" value="{{i}},{{sis}},{{dia}}">
-            {% endfor %}
-            <button type="submit">Exportar PDF</button>
+        <h2>Ingresar datos del paciente</h2>
+        <form method="POST">
+            <label>Nombre:
+                <input type="text" name="nombre" required>
+            </label>
+            <label>Apellido:
+                <input type="text" name="apellido" required>
+            </label>
+            <label>DNI:
+                <input type="text" name="dni" required>
+            </label>
+            <label>Edad:
+                <input type="number" name="edad" required>
+            </label>
+            <label>Tiempo de muestreo (min):
+                <input type="number" name="tiempo" required>
+            </label>
+            <input type="submit" value="Ingresar datos del paciente">
         </form>
     </body>
     </html>
     """
 
-    return render_template_string(html, datos=datos, img_sis=img_sis_base64, img_dia=img_dia_base64, tabla_datos=tabla_datos)
+@app.route("/exportar_pdf", methods=["POST"])
+def exportar_pdf():
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elementos = []
 
-@app.route("/descargar_pdf", methods=["POST"])
-def descargar_pdf():
-    datos = {k: request.form.get(k) for k in ["nombre", "apellido", "dni", "edad", "tiempo"]}
-    tabla = [tuple(map(int, row.split(','))) for row in request.form.getlist("tabla")]
+    datos = g.get("datos_pdf", None)
+    if not datos:
+        return "No hay datos para exportar", 400
 
-    img_sis_data = base64.b64decode(request.form["img_sis"])
-    img_dia_data = base64.b64decode(request.form["img_dia"])
+    elementos.append(Paragraph("Informe de Presión Arterial", styles['Title']))
+    elementos.append(Spacer(1, 12))
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f1, \
-         tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f2:
-        f1.write(img_sis_data)
-        f2.write(img_dia_data)
-        f1_path = f1.name
-        f2_path = f2.name
+    info = f"""
+    <b>Nombre:</b> {datos['nombre']}<br/>
+    <b>Apellido:</b> {datos['apellido']}<br/>
+    <b>DNI:</b> {datos['dni']}<br/>
+    <b>Edad:</b> {datos['edad']}<br/>
+    <b>Tiempo de muestreo:</b> {datos['tiempo']} min
+    """
+    elementos.append(Paragraph(info, styles['Normal']))
+    elementos.append(Spacer(1, 12))
 
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, "Informe de Presión Arterial", ln=True, align="C")
-    pdf.ln(10)
-    for k, v in datos.items():
-        pdf.cell(200, 8, f"{k.capitalize()}: {v}", ln=True)
-    pdf.ln(5)
-    pdf.image(f1_path, w=180)
-    pdf.ln(5)
-    pdf.image(f2_path, w=180)
-    pdf.ln(5)
+    elementos.append(Paragraph("Gráfico Presión Sistólica", styles['Heading2']))
+    elementos.append(RLImage(datos['img_sis'], width=400, height=150))
+    elementos.append(Spacer(1, 12))
 
-    pdf.set_font("Arial", size=10)
-    pdf.cell(200, 10, "Tabla de datos", ln=True)
-    pdf.set_fill_color(200, 220, 255)
-    pdf.cell(20, 8, "N°", 1, 0, 'C', 1)
-    pdf.cell(40, 8, "Sistólica", 1, 0, 'C', 1)
-    pdf.cell(40, 8, "Diastólica", 1, 1, 'C', 1)
+    elementos.append(Paragraph("Gráfico Presión Diastólica", styles['Heading2']))
+    elementos.append(RLImage(datos['img_dia'], width=400, height=150))
+    elementos.append(Spacer(1, 12))
 
-    for i, sis, dia in tabla:
-        pdf.cell(20, 8, str(i), 1)
-        pdf.cell(40, 8, str(sis), 1)
-        pdf.cell(40, 8, str(dia), 1)
-        pdf.ln(8)
+    # Crear tabla con datos
+    tabla_datos = [["N°", "Sistólica", "Diastólica"]]
+    for i, (s, d) in enumerate(zip(datos["sistolica"], datos["diastolica"])):
+        tabla_datos.append([str(i+1), str(s), str(d)])
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as output:
-        pdf.output(output.name)
-        output.seek(0)
-        return send_file(output.name, as_attachment=True, download_name="informe_paciente.pdf")
+    t = Table(tabla_datos, repeatRows=1)
+    elementos.append(t)
+
+    doc.build(elementos)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="informe_presion.pdf", mimetype='application/pdf')
+
 
 if __name__ == "__main__":
     app.run(debug=True)
