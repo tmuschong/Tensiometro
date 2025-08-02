@@ -39,30 +39,6 @@ def home():
         img_sis = generar_grafico("Presión Sistólica", sistolica)
         img_dia = generar_grafico("Presión Diastólica", diastolica)
 
-        # Guardar imágenes en archivos temporales para el PDF
-        tempfile_sis = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        tempfile_dia = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-
-        with open(tempfile_sis.name, 'wb') as f:
-            f.write(base64.b64decode(img_sis))
-
-        with open(tempfile_dia.name, 'wb') as f:
-            f.write(base64.b64decode(img_dia))
-
-        # Guardar los datos para exportar en PDF usando g (global context)
-    <form action="/exportar_pdf" method="post">
-        <input type="hidden" name="nombre" value="{nombre}">
-        <input type="hidden" name="apellido" value="{apellido}">
-        <input type="hidden" name="dni" value="{dni}">
-        <input type="hidden" name="edad" value="{edad}">
-        <input type="hidden" name="tiempo" value="{tiempo}">
-        <input type="hidden" name="sistolica" value="{','.join(map(str, sistolica))}">
-        <input type="hidden" name="diastolica" value="{','.join(map(str, diastolica))}">
-        <input type="hidden" name="img_sis" value="{img_sis}">
-        <input type="hidden" name="img_dia" value="{img_dia}">
-        <button type="submit">Exportar a PDF</button>
-    </form>
-
         # Crear filas para la tabla HTML
         filas = "".join(
             f"<tr><td>{i+1}</td><td>{s}</td><td>{d}</td></tr>"
@@ -115,10 +91,17 @@ def home():
 
             <br>
             <form action="/exportar_pdf" method="post">
-                <button type="submit">Exportar a PDF</button>
-            </form>
-            <br><a href="/">Volver</a>
-        </body>
+        <input type="hidden" name="nombre" value="{nombre}">
+        <input type="hidden" name="apellido" value="{apellido}">
+        <input type="hidden" name="dni" value="{dni}">
+        <input type="hidden" name="edad" value="{edad}">
+        <input type="hidden" name="tiempo" value="{tiempo}">
+        <input type="hidden" name="sistolica" value="{','.join(map(str, sistolica))}">
+        <input type="hidden" name="diastolica" value="{','.join(map(str, diastolica))}">
+        <input type="hidden" name="img_sis" value="{img_sis}">
+        <input type="hidden" name="img_dia" value="{img_dia}">
+        <button type="submit">Exportar a PDF</button>
+    </form>
         </html>
         """
         return html
