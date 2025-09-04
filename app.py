@@ -37,9 +37,8 @@ def home():
     try:
         resp = requests.get("http://192.168.100.45/data", timeout=5)
         data = resp.json()
-        test = data.get("TEST",{})
-        sistolica = test.get("Sistolica_TEST", [])
-        diastolica = test.get("Diastolica_TEST", [])
+        sistolica = data.get("sistolica", [])
+        diastolica = data.get("diastolica", [])
     except Exception as e:
         print("Error al obtener datos del ESP:", e)
         sistolica = []
