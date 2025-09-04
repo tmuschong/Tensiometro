@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, send_file, g
+from flask import Flask, request, render_template_string, jsonify, send_file, g
 import random
 import matplotlib.pyplot as plt
 import io
@@ -10,6 +10,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
+
+# Variable global para almacenar los datos más recientes
+datos_esp = {
+    "sistolica": [],
+    "diastolica": []
+}
 
 def generar_grafico(titulo, valores):
     fig, ax = plt.subplots(figsize=(10, 3))  # Más largo en eje X
@@ -23,6 +29,18 @@ def generar_grafico(titulo, valores):
     buf.seek(0)
     return base64.b64encode(buf.read()).decode('utf-8')
 
+# Endpoint para recibir datos desde ESP01
+@app.route("/data", methods=["POST"])
+def recibir_datos():
+    global datos_esp
+    try:
+        contenido = request.get_json()
+        datos_esp["sistolica"] = contenido.get("sistolica", [])
+        datos_esp["diastolica"] = contenido.get("diastolica", [])
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "detalle": str(e)}), 400
+
 @app.route("/", methods=["GET", "POST"])
 def home():
     if request.method == "POST":
@@ -35,10 +53,9 @@ def home():
 
         # Intento leer mediciones esp01
     try:
-        resp = requests.get("http://192.168.100.45/data", timeout=5)
-        data = resp.json()
-        sistolica = data.get("sistolica", [])
-        diastolica = data.get("diastolica", [])
+        sistolica = datos_esp.get("sistolica", [])
+        diastolica = datos_esp.get("diastolica", [])
+
     except Exception as e:
         print("Error al obtener datos del ESP:", e)
         sistolica = []
