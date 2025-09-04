@@ -35,7 +35,7 @@ def home():
 
         # Leo mediciones
     try:
-        resp = requests.get("http://<IP_DEL_ESP>/data", timeout=5)
+        resp = requests.get("http://192.168.100.45/data", timeout=5)
         data = resp.json()
         sistolica = data.get("sistolica", [])
         diastolica = data.get("diastolica", [])
