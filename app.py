@@ -52,14 +52,14 @@ def home():
         tiempo = request.form.get("tiempo", "N/A")
 
         # Intento leer mediciones esp01
-    try:
-        sistolica = datos_esp.get("sistolica", [])
-        diastolica = datos_esp.get("diastolica", [])
+        try:
+            sistolica = datos_esp.get("sistolica", [])
+            diastolica = datos_esp.get("diastolica", [])
 
-    except Exception as e:
-        print("Error al obtener datos del ESP:", e)
-        sistolica = []
-        diastolica = []
+        except Exception as e:
+            print("Error al obtener datos del ESP:", e)
+            sistolica = []
+            diastolica = []
 
 
         img_sis = generar_grafico("Presión Sistólica", sistolica)
