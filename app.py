@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import io
 import base64
 import tempfile
+import requests
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -32,9 +33,17 @@ def home():
         edad = request.form.get("edad", "N/A")
         tiempo = request.form.get("tiempo", "N/A")
 
-        # Simular mediciones
-        sistolica = [random.randint(110, 140) for _ in range(72)]
-        diastolica = [random.randint(70, 90) for _ in range(72)]
+        # Leo mediciones
+    try:
+        resp = requests.get("http://<IP_DEL_ESP>/data", timeout=5)
+        data = resp.json()
+        sistolica = data.get("sistolica", [])
+        diastolica = data.get("diastolica", [])
+    except Exception as e:
+        print("Error al obtener datos del ESP:", e)
+        sistolica = []
+        diastolica = []
+
 
         img_sis = generar_grafico("Presión Sistólica", sistolica)
         img_dia = generar_grafico("Presión Diastólica", diastolica)
