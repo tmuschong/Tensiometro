@@ -38,8 +38,8 @@ def recibir_datos():
         datos_esp["sistolica"] = contenido.get("sistolica", [])
         datos_esp["diastolica"] = contenido.get("diastolica", [])
         datos_esp["hora"] = contenido.get("hora", [])
-        datos_esp["minuto"] = contenido.get("minuto", [])
-        datos_esp["segundo"] = contenido.get("segundo", [])
+        datos_esp["minutos"] = contenido.get("minutos", [])
+        datos_esp["segundos"] = contenido.get("segundos", [])
         datos_esp["dia"] = contenido.get("dia", [])
         datos_esp["mes"] = contenido.get("mes", [])
         datos_esp["ano"] = contenido.get("ano", [])
@@ -82,8 +82,8 @@ def home():
                     sistolica,
                     diastolica,
                     datos_esp.get("hora", []),
-                    datos_esp.get("minuto", []),
-                    datos_esp.get("segundo", []),
+                    datos_esp.get("minutos", []),
+                    datos_esp.get("segundos", []),
                     datos_esp.get("dia", []),
                     datos_esp.get("mes", []),
                     datos_esp.get("ano", []),
