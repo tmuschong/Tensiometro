@@ -37,9 +37,16 @@ def recibir_datos():
         contenido = request.get_json()
         datos_esp["sistolica"] = contenido.get("sistolica", [])
         datos_esp["diastolica"] = contenido.get("diastolica", [])
+        datos_esp["hora"] = contenido.get("hora", [])
+        datos_esp["minuto"] = contenido.get("minuto", [])
+        datos_esp["segundo"] = contenido.get("segundo", [])
+        datos_esp["dia"] = contenido.get("dia", [])
+        datos_esp["mes"] = contenido.get("mes", [])
+        datos_esp["ano"] = contenido.get("ano", [])
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         return jsonify({"status": "error", "detalle": str(e)}), 400
+
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -67,9 +74,23 @@ def home():
 
         # Crear filas para la tabla HTML
         filas = "".join(
-            f"<tr><td>{i+1}</td><td>{s}</td><td>{d}</td></tr>"
-            for i, (s, d) in enumerate(zip(sistolica, diastolica))
+            f"<tr><td>{i+1}</td><td>{s}</td><td>{d}</td>"
+            f"<td>{h:02d}:{m:02d}:{seg:02d}</td>"
+            f"<td>{dia}/{mes}/{2000+ano}</td></tr>"
+            for i, (s, d, h, m, seg, dia, mes, ano) in enumerate(
+                zip(
+                    sistolica,
+                    diastolica,
+                    datos_esp.get("hora", []),
+                    datos_esp.get("minuto", []),
+                    datos_esp.get("segundo", []),
+                    datos_esp.get("dia", []),
+                    datos_esp.get("mes", []),
+                    datos_esp.get("ano", []),
+                )
+            )
         )
+
 
         html = f"""
         <html>
@@ -111,9 +132,16 @@ def home():
             </div>
 
             <table>
-                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th></tr>
+                <tr>
+                    <th>N°</th>
+                    <th>Sistólica</th>
+                    <th>Diastólica</th>
+                    <th>Hora</th>
+                    <th>Fecha</th>
+                </tr>
                 {filas}
             </table>
+
 
             <br>
             <form action="/exportar_pdf" method="post">
