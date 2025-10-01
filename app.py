@@ -38,6 +38,13 @@ def recibir_datos():
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         return jsonify({"status": "error", "detalle": str(e)}), 400
+        
+# Endpoint GET para debug: mostrar datos actuales en navegador
+@app.route("/data_debug", methods=["GET"])
+def data_debug():
+    global datos_esp
+    return jsonify(datos_esp)
+
 
 # Página principal que muestra gráficos
 @app.route("/", methods=["GET"])
