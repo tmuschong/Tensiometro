@@ -23,17 +23,38 @@ datos_esp = {
 }
 
 # Función para generar gráfico y retornar en base64
-def generar_grafico(titulo, valores):
+def generar_grafico(titulo, valores, horas=None, minutos=None):
     fig, ax = plt.subplots(figsize=(10, 3))
-    ax.plot(valores, marker='o')
+
+    # Si se pasan horas/minutos, construir etiquetas de tiempo
+    if horas and minutos and len(horas) == len(valores):
+        etiquetas_tiempo = [f"{h:02d}:{m:02d}" for h, m in zip(horas, minutos)]
+        ax.plot(etiquetas_tiempo, valores, marker='o')
+        ax.set_xlabel("Hora de medición")
+    else:
+        ax.plot(valores, marker='o')
+        ax.set_xlabel("Muestra")
+
+    # Etiquetas de eje Y dinámicas según el tipo de gráfico
+    if "Sistólica" in titulo:
+        ax.set_ylabel("Presión Sistólica (mmHg)")
+    elif "Diastólica" in titulo:
+        ax.set_ylabel("Presión Diastólica (mmHg)")
+    elif "PPM" in titulo:
+        ax.set_ylabel("Pulsaciones por Minuto")
+    else:
+        ax.set_ylabel("Valor")
+
     ax.set_title(titulo)
-    ax.set_ylabel("Valor")
-    ax.set_xlabel("Tiempo")
+    ax.tick_params(axis='x', rotation=45)
+
+    plt.tight_layout()
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode('utf-8')
+
 
 # Endpoint POST: recibir datos desde ESP01
 @app.route("/data", methods=["POST"])
@@ -73,9 +94,10 @@ def home():
         mes = datos_esp.get("mes", [])
         ano = datos_esp.get("ano", [])
 
-        img_sis = generar_grafico("Presión Sistólica", sistolica)
-        img_dia = generar_grafico("Presión Diastólica", diastolica)
-        img_ppm = generar_grafico("PPM", ppm)
+        img_sis = generar_grafico("Presión Sistólica", sistolica, hora, minutos)
+        img_dia = generar_grafico("Presión Diastólica", diastolica, hora, minutos)
+        img_ppm = generar_grafico("PPM", ppm, hora, minutos)
+
 
         # Crear filas para la tabla HTML (hora sin segundos y columna separada)
         filas = ""
