@@ -69,7 +69,6 @@ def home():
         ppm = datos_esp.get("ppm", [])
         hora = datos_esp.get("hora", [])
         minutos = datos_esp.get("minutos", [])
-        segundos = datos_esp.get("segundos", [])
         dia = datos_esp.get("dia", [])
         mes = datos_esp.get("mes", [])
         ano = datos_esp.get("ano", [])
@@ -78,10 +77,12 @@ def home():
         img_dia = generar_grafico("Presión Diastólica", diastolica)
         img_ppm = generar_grafico("PPM", ppm)
 
-        # Crear filas para la tabla HTML con fecha y hora
+        # Crear filas para la tabla HTML (hora sin segundos y columna separada)
         filas = ""
         for i in range(len(sistolica)):
-            filas += f"<tr><td>{i+1}</td><td>{sistolica[i]}</td><td>{diastolica[i]}</td><td>{ppm[i] if i < len(ppm) else ''}</td><td>{hora[i]:02d}:{minutos[i]:02d}:{segundos[i]:02d} {dia[i]:02d}/{mes[i]:02d}/{ano[i]}</td></tr>"
+            hora_str = f"{hora[i]:02d}:{minutos[i]:02d}"
+            fecha_str = f"{dia[i]:02d}/{mes[i]:02d}/{ano[i]}"
+            filas += f"<tr><td>{i+1}</td><td>{sistolica[i]}</td><td>{diastolica[i]}</td><td>{ppm[i] if i < len(ppm) else ''}</td><td>{hora_str}</td><td>{fecha_str}</td></tr>"
 
         html = f"""
         <html>
@@ -124,7 +125,7 @@ def home():
             </div>
 
             <table>
-                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th><th>PPM</th><th>Fecha/Hora</th></tr>
+                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th><th>PPM</th><th>Hora</th><th>Fecha</th></tr>
                 {filas}
             </table>
 
@@ -140,7 +141,6 @@ def home():
                 <input type="hidden" name="ppm" value="{','.join(map(str, ppm))}">
                 <input type="hidden" name="hora" value="{','.join(map(str, hora))}">
                 <input type="hidden" name="minutos" value="{','.join(map(str, minutos))}">
-                <input type="hidden" name="segundos" value="{','.join(map(str, segundos))}">
                 <input type="hidden" name="dia" value="{','.join(map(str, dia))}">
                 <input type="hidden" name="mes" value="{','.join(map(str, mes))}">
                 <input type="hidden" name="ano" value="{','.join(map(str, ano))}">
@@ -218,7 +218,6 @@ def exportar_pdf():
     ppm = list(map(int, request.form.get("ppm").split(',')))
     hora = list(map(int, request.form.get("hora").split(',')))
     minutos = list(map(int, request.form.get("minutos").split(',')))
-    segundos = list(map(int, request.form.get("segundos").split(',')))
     dia = list(map(int, request.form.get("dia").split(',')))
     mes = list(map(int, request.form.get("mes").split(',')))
     ano = list(map(int, request.form.get("ano").split(',')))
@@ -263,11 +262,12 @@ def exportar_pdf():
     elementos.append(RLImage(ruta_ppm, width=400, height=150))
     elementos.append(Spacer(1, 12))
 
-    # Tabla con fecha/hora
-    tabla_datos = [["N°", "Sistólica", "Diastólica", "PPM", "Fecha/Hora"]]
+    # Tabla con fecha y hora separadas (sin segundos)
+    tabla_datos = [["N°", "Sistólica", "Diastólica", "PPM", "Hora", "Fecha"]]
     for i in range(len(sistolica)):
-        fecha = f"{hora[i]:02d}:{minutos[i]:02d}:{segundos[i]:02d} {dia[i]:02d}/{mes[i]:02d}/{ano[i]}"
-        tabla_datos.append([str(i+1), str(sistolica[i]), str(diastolica[i]), str(ppm[i]), fecha])
+        hora_str = f"{hora[i]:02d}:{minutos[i]:02d}"
+        fecha_str = f"{dia[i]:02d}/{mes[i]:02d}/{ano[i]}"
+        tabla_datos.append([str(i+1), str(sistolica[i]), str(diastolica[i]), str(ppm[i]), hora_str, fecha_str])
 
     t = Table(tabla_datos, repeatRows=1)
     elementos.append(t)
@@ -278,3 +278,4 @@ def exportar_pdf():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
