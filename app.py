@@ -138,11 +138,8 @@ def home():
             </div>
 
             <div class="graficos">
-                <h2>Presión Sistólica</h2>
                 <img src="data:image/png;base64,{img_sis}">
-                <h2>Presión Diastólica</h2>
                 <img src="data:image/png;base64,{img_dia}">
-                <h2>PPM</h2>
                 <img src="data:image/png;base64,{img_ppm}">
             </div>
 
