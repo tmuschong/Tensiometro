@@ -88,6 +88,17 @@ def home():
         sistolica = datos_esp.get("sistolica", [])
         diastolica = datos_esp.get("diastolica", [])
         ppm = datos_esp.get("ppm", [])
+        # Calcular PP y DP
+        pp = []
+        dp = []
+        for i in range(len(sistolica)):
+            if i < len(diastolica) and i < len(ppm):
+                pp.append(sistolica[i] - diastolica[i])       # Presión de Pulso
+                dp.append(sistolica[i] * ppm[i])              # Doble Producto
+            else:
+                pp.append(0)
+                dp.append(0)
+
         hora = datos_esp.get("hora", [])
         minutos = datos_esp.get("minutos", [])
         dia = datos_esp.get("dia", [])
@@ -104,7 +115,17 @@ def home():
         for i in range(len(sistolica)):
             hora_str = f"{hora[i]:02d}:{minutos[i]:02d}"
             fecha_str = f"{dia[i]:02d}/{mes[i]:02d}/{ano[i]}"
-            filas += f"<tr><td>{i+1}</td><td>{sistolica[i]}</td><td>{diastolica[i]}</td><td>{ppm[i] if i < len(ppm) else ''}</td><td>{hora_str}</td><td>{fecha_str}</td></tr>"
+            filas += f"<tr><td>{i+1}</td><td>{sistolica[i]}</td><td>{diastolica[i]}</td><td>{ppm[i]}</td><td>{pp[i]}</td><td>{dp[i]}</td><td>{hora_str}</td><td>{fecha_str}</td></tr>"
+
+        # Calcular promedios
+        if len(sistolica) > 0:
+            prom_sis = round(sum(sistolica) / len(sistolica), 1)
+            prom_dia = round(sum(diastolica) / len(diastolica), 1)
+            prom_ppm = round(sum(ppm) / len(ppm), 1)
+            prom_pp = round(sum(pp) / len(pp), 1)
+            prom_dp = round(sum(dp) / len(dp), 1)
+            filas += f"<tr style='font-weight:bold; background-color:#f2f2f2;'><td>Promedio</td><td>{prom_sis}</td><td>{prom_dia}</td><td>{prom_ppm}</td><td>{prom_pp}</td><td>{prom_dp}</td><td>-</td><td>-</td></tr>"
+
 
         html = f"""
         <html>
@@ -144,7 +165,7 @@ def home():
             </div>
 
             <table>
-                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th><th>PPM</th><th>Hora</th><th>Fecha</th></tr>
+                <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th><th>PPM</th><th>PP (S-D)</th><th>DP (S×PPM)</th><th>Hora</th><th>Fecha</th></tr>
                 {filas}
             </table>
 
@@ -282,13 +303,91 @@ def exportar_pdf():
     elementos.append(Spacer(1, 12))
 
     # Tabla con fecha y hora separadas (sin segundos)
-    tabla_datos = [["N°", "Sistólica", "Diastólica", "PPM", "Hora", "Fecha"]]
+    # Calcular PP y DP también para el PDF
+    pp = []
+    dp = []
+    for i in range(len(sistolica)):
+        if i < len(diastolica) and i < len(ppm):
+            pp.append(sistolica[i] - diastolica[i])
+            dp.append(sistolica[i] * ppm[i])
+        else:
+            pp.append(0)
+            dp.append(0)
+
+    tabla_datos = [["N°", "Sistólica", "Diastólica", "PPM", "PP (S-D)", "DP (S×PPM)", "Hora", "Fecha"]]
+        # Tabla con fecha y hora separadas (sin segundos)
+    # Calcular PP y DP también para el PDF
+    pp = []
+    dp = []
+    for i in range(len(sistolica)):
+        if i < len(diastolica) and i < len(ppm):
+            pp.append(sistolica[i] - diastolica[i])
+            dp.append(sistolica[i] * ppm[i])
+        else:
+            pp.append(0)
+            dp.append(0)
+
+    # Crear tabla con cabeceras
+    tabla_datos = [["N°", "Sistólica", "Diastólica", "PPM", "PP (S-D)", "DP (S×PPM)", "Hora", "Fecha"]]
     for i in range(len(sistolica)):
         hora_str = f"{hora[i]:02d}:{minutos[i]:02d}"
         fecha_str = f"{dia[i]:02d}/{mes[i]:02d}/{ano[i]}"
-        tabla_datos.append([str(i+1), str(sistolica[i]), str(diastolica[i]), str(ppm[i]), hora_str, fecha_str])
+        tabla_datos.append([
+            str(i+1),
+            str(sistolica[i]),
+            str(diastolica[i]),
+            str(ppm[i]),
+            str(pp[i]),
+            str(dp[i]),
+            hora_str,
+            fecha_str
+        ])
+
+    # Agregar fila de promedios
+    if len(sistolica) > 0:
+        prom_sis = round(sum(sistolica) / len(sistolica), 1)
+        prom_dia = round(sum(diastolica) / len(diastolica), 1)
+        prom_ppm = round(sum(ppm) / len(ppm), 1)
+        prom_pp = round(sum(pp) / len(pp), 1)
+        prom_dp = round(sum(dp) / len(dp), 1)
+        tabla_datos.append([
+            "Promedio",
+            str(prom_sis),
+            str(prom_dia),
+            str(prom_ppm),
+            str(prom_pp),
+            str(prom_dp),
+            "-",
+            "-"
+        ])
+
+    # Crear tabla PDF con estilo
+    from reportlab.platypus import TableStyle
+    from reportlab.lib import colors
 
     t = Table(tabla_datos, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.whitesmoke),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+    ]))
+
+
+
+    t = Table(tabla_datos, repeatRows=1)
+    from reportlab.platypus import TableStyle
+    from reportlab.lib import colors
+
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold')
+    ]))
+
     elementos.append(t)
 
     doc.build(elementos)
