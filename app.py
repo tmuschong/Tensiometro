@@ -8,6 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 import statistics
+import math
 
 app = Flask(__name__)
 
@@ -18,7 +19,7 @@ datos_esp = {
     "ppm": [],
     "hora": [],
     "minutos": [],
-    "pam": [],        # antes 'segundos'
+    "pam": [],        
     "dia": [],
     "mes": [],
     "ano": []
@@ -31,23 +32,20 @@ def safe_get(lst, i, default=None):
     except Exception:
         return default
 
-# convierte lista de valores a floats cuando sea posible (mantiene orden)
+# convierte lista de valores a floats cuando sea posible
 def to_numeric_list(lst):
     res = []
     for v in lst:
         try:
             res.append(float(v))
         except Exception:
-            # ignora valores no numéricos como None o '' (los evita en cálculos)
             pass
     return res
 
-# Genera gráfico combinado (sistólica y diastólica como líneas; ppm y pam como puntos)
+# Genera gráfico combinado
 def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minutos=None):
-    # convertir a listas numéricas paralelas (si vienen mezcladas)
     n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
-    # construir valores asegurando longitud n (si faltan, usar nan para no graficar)
-    import math
+
     def v_at(lst, i):
         try:
             return float(lst[i])
@@ -59,7 +57,6 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     y_ppm = [v_at(ppm, i) for i in range(n)]
     y_pam = [v_at(pam, i) for i in range(n)]
 
-    # X: índices y etiquetas de tiempo si están disponibles
     if hora and minutos and len(hora) >= n and len(minutos) >= n:
         etiquetas = [f"{int(hora[i]):02d}:{int(minutos[i]):02d}" for i in range(n)]
         x = list(range(n))
@@ -71,16 +68,11 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
         xticklabels = [str(i+1) for i in x]
 
     fig, ax = plt.subplots(figsize=(10,4))
-
-    # Líneas para presiones (conectar puntos)
     ax.plot(x, y_sis, marker='o', label='Sistólica', linewidth=2)
     ax.plot(x, y_dia, marker='o', label='Diastólica', linewidth=2)
-
-    # Puntos para PPM y PAM (mismos ejes)
     ax.scatter(x, y_ppm, label='PPM', marker='x', s=60)
     ax.scatter(x, y_pam, label='PAM', marker='s', s=50)
 
-    # Etiquetas
     ax.set_xlabel("Hora de medición" if hora and minutos else "Muestra")
     ax.set_ylabel("Valor (mmHg / PPM)")
     ax.set_xticks(xticks)
@@ -111,7 +103,12 @@ def recibir_datos():
     try:
         contenido = request.get_json()
         for key in datos_esp.keys():
-            datos_esp[key] = contenido.get(key, datos_esp.get(key, []))
+            if key in contenido:
+                nuevos = contenido[key]
+                if isinstance(nuevos, list):
+                    datos_esp[key].extend(nuevos)
+                else:
+                    datos_esp[key].append(nuevos)
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         return jsonify({"status": "error", "detalle": str(e)}), 400
@@ -131,7 +128,6 @@ def home():
         edad = request.form.get("edad", "N/A")
         tiempo = request.form.get("tiempo", "N/A")
 
-        # extraer medidas
         sistolica = datos_esp.get("sistolica", [])
         diastolica = datos_esp.get("diastolica", [])
         ppm = datos_esp.get("ppm", [])
@@ -143,39 +139,27 @@ def home():
         ano = datos_esp.get("ano", [])
 
         n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
-
-        # calcular PP y DP (solo numéricos)
         pp = []
         dp = []
         for i in range(n):
             s = safe_get(sistolica, i, None)
             d = safe_get(diastolica, i, None)
             p = safe_get(ppm, i, None)
-            try:
-                s_f = float(s)
-            except Exception:
-                s_f = None
-            try:
-                d_f = float(d)
-            except Exception:
-                d_f = None
-            try:
-                p_f = float(p)
-            except Exception:
-                p_f = None
-
+            try: s_f = float(s)
+            except: s_f = None
+            try: d_f = float(d)
+            except: d_f = None
+            try: p_f = float(p)
+            except: p_f = None
             pp.append(s_f - d_f if (s_f is not None and d_f is not None) else None)
             dp.append(s_f * p_f if (s_f is not None and p_f is not None) else None)
 
-        # gráfico combinado
         img_comb = generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora, minutos)
 
-        # índices diurno/nocturno
         indices_diurno = [i for i,h in enumerate(hora) if isinstance(h, (int,float)) and 7 <= h < 22]
         indices_nocturno = [i for i,h in enumerate(hora) if isinstance(h, (int,float)) and (h < 7 or h >= 22)]
-
         def extraer_lista(indices, lista):
-            return [lista[i] for i in indices if i < len(lista) and isinstance(lista[i], (int, float))]
+            return [lista[i] for i in indices if i < len(lista) and isinstance(lista[i], (int,float))]
 
         resumen_total = {
             "Sistolica": calcular_resumen([v for v in sistolica if isinstance(v,(int,float)) or (isinstance(v,str) and v.replace('.','',1).isdigit() )]),
@@ -185,45 +169,23 @@ def home():
             "PP": calcular_resumen([v for v in pp if isinstance(v,(int,float))]),
             "DP": calcular_resumen([v for v in dp if isinstance(v,(int,float))])
         }
-        resumen_diurno = {
-            "Sistolica": calcular_resumen(extraer_lista(indices_diurno, sistolica)),
-            "Diastolica": calcular_resumen(extraer_lista(indices_diurno, diastolica)),
-            "PAM": calcular_resumen(extraer_lista(indices_diurno, pam)),
-            "PPM": calcular_resumen(extraer_lista(indices_diurno, ppm)),
-            "PP": calcular_resumen(extraer_lista(indices_diurno, pp)),
-            "DP": calcular_resumen(extraer_lista(indices_diurno, dp))
-        }
-        resumen_nocturno = {
-            "Sistolica": calcular_resumen(extraer_lista(indices_nocturno, sistolica)),
-            "Diastolica": calcular_resumen(extraer_lista(indices_nocturno, diastolica)),
-            "PAM": calcular_resumen(extraer_lista(indices_nocturno, pam)),
-            "PPM": calcular_resumen(extraer_lista(indices_nocturno, ppm)),
-            "PP": calcular_resumen(extraer_lista(indices_nocturno, pp)),
-            "DP": calcular_resumen(extraer_lista(indices_nocturno, dp))
-        }
+        resumen_diurno = {k: calcular_resumen(extraer_lista(indices_diurno, v)) for k,v in zip(resumen_total.keys(), [sistolica, diastolica, pam, ppm, pp, dp])}
+        resumen_nocturno = {k: calcular_resumen(extraer_lista(indices_nocturno, v)) for k,v in zip(resumen_total.keys(), [sistolica, diastolica, pam, ppm, pp, dp])}
 
         def generar_tabla_html(resumen, titulo):
             filas = ""
             for clave, valores in resumen.items():
                 filas += f"<tr><td>{clave}</td><td>{valores[0]}</td><td>{valores[1]}</td><td>{valores[2]}</td><td>{valores[3]}</td></tr>"
-            return f"""
-            <h3>{titulo}</h3>
-            <table>
-                <tr><th>Variable</th><th>Máx</th><th>Mín</th><th>Media</th><th>Desvío</th></tr>
-                {filas}
-            </table><br>
-            """
+            return f"<h3>{titulo}</h3><table><tr><th>Variable</th><th>Máx</th><th>Mín</th><th>Media</th><th>Desvío</th></tr>{filas}</table><br>"
 
         html_resumen = generar_tabla_html(resumen_total, "Total") + generar_tabla_html(resumen_diurno, "Diurno") + generar_tabla_html(resumen_nocturno, "Nocturno")
 
-        # tabla principal
         filas = ""
         for i in range(n):
             hora_str = f"{int(hora[i]):02d}:{int(minutos[i]):02d}" if (i < len(hora) and i < len(minutos) and isinstance(hora[i], (int,float)) and isinstance(minutos[i], (int,float))) else (safe_get(hora,i,""))
             fecha_str = f"{int(dia[i]):02d}/{int(mes[i]):02d}/{int(ano[i])}" if (i < len(dia) and i < len(mes) and i < len(ano) and isinstance(dia[i], (int,float)) and isinstance(mes[i], (int,float)) and isinstance(ano[i], (int,float))) else ""
             filas += f"<tr><td>{i+1}</td><td>{safe_get(sistolica,i,'')}</td><td>{safe_get(diastolica,i,'')}</td><td>{safe_get(pam,i,'')}</td><td>{safe_get(ppm,i,'')}</td><td>{safe_get(pp,i,'')}</td><td>{safe_get(dp,i,'')}</td><td>{hora_str}</td><td>{fecha_str}</td></tr>"
 
-        # promedios
         def mean_or_dash(lst):
             vals = []
             for v in lst:
@@ -332,7 +294,6 @@ def exportar_pdf():
     edad = request.form.get("edad")
     tiempo = request.form.get("tiempo")
 
-    # parseo seguro de listas
     def parse_floats(s):
         if not s:
             return []
@@ -355,7 +316,6 @@ def exportar_pdf():
 
     img_comb_b64 = request.form.get("img_comb","")
 
-    # guardar imagen temporal
     if img_comb_b64:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f_comb:
             f_comb.write(base64.b64decode(img_comb_b64))
@@ -365,7 +325,6 @@ def exportar_pdf():
 
     elementos.append(Paragraph("Informe de Presión Arterial", styles['Title']))
     elementos.append(Spacer(1,12))
-
     info = f"<b>Nombre:</b> {nombre}<br/><b>Apellido:</b> {apellido}<br/><b>DNI:</b> {dni}<br/><b>Edad:</b> {edad}<br/><b>Tiempo de muestreo:</b> {tiempo} min"
     elementos.append(Paragraph(info, styles['Normal']))
     elementos.append(Spacer(1,12))
@@ -375,13 +334,8 @@ def exportar_pdf():
         elementos.append(RLImage(ruta_comb, width=500, height=200))
         elementos.append(Spacer(1,12))
 
-    # resúmenes para PDF (recalcular)
     pp = [s-d for s,d in zip(sistolica, diastolica)]
     dp = [s*p for s,p in zip(sistolica, ppm)]
-
-    def extraer_lista(indices, lista):
-        return [lista[i] for i in indices if i < len(lista)]
-
     indices_diurno = [i for i,h in enumerate(hora) if 7 <= h < 22]
     indices_nocturno = [i for i,h in enumerate(hora) if h < 7 or h >= 22]
 
@@ -393,22 +347,8 @@ def exportar_pdf():
         "PP": calcular_resumen(pp),
         "DP": calcular_resumen(dp)
     }
-    resumen_diurno = {
-        "Sistolica": calcular_resumen(extraer_lista(indices_diurno, sistolica)),
-        "Diastolica": calcular_resumen(extraer_lista(indices_diurno, diastolica)),
-        "PAM": calcular_resumen(extraer_lista(indices_diurno, pam)),
-        "PPM": calcular_resumen(extraer_lista(indices_diurno, ppm)),
-        "PP": calcular_resumen(extraer_lista(indices_diurno, pp)),
-        "DP": calcular_resumen(extraer_lista(indices_diurno, dp))
-    }
-    resumen_nocturno = {
-        "Sistolica": calcular_resumen(extraer_lista(indices_nocturno, sistolica)),
-        "Diastolica": calcular_resumen(extraer_lista(indices_nocturno, diastolica)),
-        "PAM": calcular_resumen(extraer_lista(indices_nocturno, pam)),
-        "PPM": calcular_resumen(extraer_lista(indices_nocturno, ppm)),
-        "PP": calcular_resumen(extraer_lista(indices_nocturno, pp)),
-        "DP": calcular_resumen(extraer_lista(indices_nocturno, dp))
-    }
+    resumen_diurno = {k: calcular_resumen([v[i] for i in indices_diurno if i < len(v)]) for k,v in zip(resumen_total.keys(), [sistolica, diastolica, pam, ppm, pp, dp])}
+    resumen_nocturno = {k: calcular_resumen([v[i] for i in indices_nocturno if i < len(v)]) for k,v in zip(resumen_total.keys(), [sistolica, diastolica, pam, ppm, pp, dp])}
 
     def generar_tabla_pdf(resumen, titulo):
         elementos_tabla = [[titulo,"Máx","Mín","Media","Desvío"]]
@@ -448,7 +388,6 @@ def exportar_pdf():
             fecha_str
         ])
 
-    # fila promedios
     def mean_str(lst):
         vals = [v for v in lst if isinstance(v,(int,float))]
         return str(round(statistics.mean(vals),1)) if vals else "-"
@@ -479,3 +418,4 @@ def exportar_pdf():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
