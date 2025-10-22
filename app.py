@@ -74,17 +74,32 @@ def calcular_resumen(valores):
         return ["-", "-", "-", "-"]
 
 # Endpoint POST: recibir datos desde ESP01 (JSON)
-@app.route("/data", methods=["POST"])
+@app.route('/data', methods=['POST'])
 def recibir_datos():
     global datos_esp
     try:
-        contenido = request.get_json()
-        for key in datos_esp.keys():
-            # si la key no viene, dejamos la lista anterior o la vacía
-            datos_esp[key] = contenido.get(key, datos_esp.get(key, []))
-        return jsonify({"status": "ok"}), 200
+        data = request.get_json()
+
+        # ✅ Reemplaza completamente los datos anteriores
+        datos_esp = {
+            'sistolica': data.get('sistolica', []),
+            'diastolica': data.get('diastolica', []),
+            'pam': data.get('pam', []),
+            'ppm': data.get('ppm', []),
+            'hora': data.get('hora', []),
+            'minutos': data.get('minutos', []),
+            'dia': data.get('dia', []),
+            'mes': data.get('mes', []),
+            'ano': data.get('ano', [])
+        }
+
+        print(f"[Flask] Datos recibidos ({len(datos_esp['sistolica'])} muestras)")
+        return jsonify({"status": "ok", "mensaje": "Datos reemplazados correctamente"}), 200
+
     except Exception as e:
-        return jsonify({"status": "error", "detalle": str(e)}), 400
+        print(f"[Error] {e}")
+        return jsonify({"status": "error", "mensaje": str(e)}), 400
+
 
 # Endpoint GET: ver datos en navegador (debug)
 @app.route("/data_get", methods=["GET"])
