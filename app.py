@@ -84,9 +84,6 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     # ✅ Cuadrícula gris suave
     ax.grid(True, linestyle='--', color='lightgrey', alpha=0.6)
 
-    # ✅ Título nuevo
-    ax.set_title("Gráfico de Tendencias", fontsize=14, fontweight='bold', pad=15)
-
     # ✅ Leyenda arriba y centrada
     ax.legend(
         loc='upper center',
@@ -259,7 +256,7 @@ def home():
         Tiempo de muestreo (min): {tiempo}
         </div>
         <div class="graficos">
-            <h2>Gráfico combinado</h2>
+            <h2>Gráfico de Tendencias</h2>
             <img src="data:image/png;base64,{img_comb}">
         </div>
 
@@ -359,7 +356,7 @@ def exportar_pdf():
     elementos.append(Spacer(1,12))
 
     if ruta_comb:
-        elementos.append(Paragraph("Gráfico combinado", styles['Heading2']))
+        elementos.append(Paragraph("Gráfico de Tendencias", styles['Heading2']))
         elementos.append(RLImage(ruta_comb, width=500, height=200))
         elementos.append(Spacer(1,12))
 
