@@ -44,6 +44,7 @@ def to_numeric_list(lst):
 
 # Genera gráfico combinado
 def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minutos=None):
+
     n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
 
     def v_at(lst, i):
@@ -57,6 +58,7 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     y_ppm = [v_at(ppm, i) for i in range(n)]
     y_pam = [v_at(pam, i) for i in range(n)]
 
+    # Etiquetas de tiempo
     if hora and minutos and len(hora) >= n and len(minutos) >= n:
         etiquetas = [f"{int(hora[i]):02d}:{int(minutos[i]):02d}" for i in range(n)]
         x = list(range(n))
@@ -65,32 +67,49 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     else:
         x = list(range(n))
         xticks = x
-        xticklabels = [str(i+1) for i in x]
+        xticklabels = [str(i + 1) for i in x]
 
+    # --- Gráfico ---
     fig, ax = plt.subplots(figsize=(10, 4))
 
-    # ✅ Líneas con colores y estilos más distinguibles
-    ax.plot(x, y_sis, marker='o', color='red', label='Sistólica (mmHg)', linewidth=2)
-    ax.plot(x, y_dia, marker='o', color='blue', label='Diastólica (mmHg)', linewidth=2)
-    ax.scatter(x, y_ppm, label='PPM', color='green', marker='x', s=60)
-    ax.scatter(x, y_pam, label='PAM', color='purple', marker='s', s=50)
+    # Cuadrícula suave y eje desde 0
+    ax.grid(True, linestyle="--", linewidth=0.5, color="lightgray", alpha=0.7)
+    ax.set_ylim(bottom=0)
 
+    # Líneas de presión sistólica y diastólica
+    ax.plot(x, y_sis, marker='o', label='Sistólica', color='red', linewidth=2)
+    ax.plot(x, y_dia, marker='o', label='Diastólica', color='blue', linewidth=2)
+
+    # --- PP: línea negra entre sistólica y diastólica ---
+    for xi, s, d in zip(x, y_sis, y_dia):
+        if not math.isnan(s) and not math.isnan(d):
+            ax.vlines(xi, d, s, color="black", linewidth=2, label='_nolegend_')  # No repite en leyenda
+
+    # PAM y PPM como líneas conectadas
+    ax.plot(x, y_pam, marker='s', color='purple', linewidth=1.8, label='PAM')
+    ax.plot(x, y_ppm, marker='x', color='green', linewidth=1.8, label='PPM')
+
+    # Etiquetas y formato
     ax.set_xlabel("Hora de medición" if hora and minutos else "Muestra")
     ax.set_ylabel("Valor (mmHg / PPM)")
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticklabels, rotation=45)
-    ax.set_ylim(bottom=0)  # ✅ Eje Y comienza en 0
+    ax.set_title("Gráfico de Tendencias")
 
-    # ✅ Cuadrícula gris suave
-    ax.grid(True, linestyle='--', color='lightgrey', alpha=0.6)
-
-    # ✅ Leyenda arriba y centrada
+    # --- Leyenda completa, arriba centrada ---
+    legend_labels = [
+        plt.Line2D([], [], color='red', marker='o', label='Sistólica', linewidth=2),
+        plt.Line2D([], [], color='blue', marker='o', label='Diastólica', linewidth=2),
+        plt.Line2D([], [], color='black', linewidth=2, label='PP (Presión de Pulso)'),
+        plt.Line2D([], [], color='purple', marker='s', label='PAM', linewidth=1.8),
+        plt.Line2D([], [], color='green', marker='x', label='PPM', linewidth=1.8)
+    ]
     ax.legend(
+        handles=legend_labels,
         loc='upper center',
-        bbox_to_anchor=(0.5, 1.25),
-        ncol=2,
-        frameon=False,
-        fontsize=9
+        bbox_to_anchor=(0.5, 1.20),
+        ncol=5,
+        frameon=False
     )
 
     plt.tight_layout()
@@ -99,6 +118,7 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode('utf-8')
+
 
 
 
