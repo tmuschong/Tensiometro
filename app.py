@@ -44,63 +44,79 @@ def to_numeric_list(lst):
 
 # Genera gráfico combinado
 def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minutos=None):
-
-    n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
-
-    def v_at(lst, i):
-        try:
-            return float(lst[i])
-        except Exception:
-            return math.nan
-
-    y_sis = [v_at(sistolica, i) for i in range(n)]
-    y_dia = [v_at(diastolica, i) for i in range(n)]
-    y_ppm = [v_at(ppm, i) for i in range(n)]
-    y_pam = [v_at(pam, i) for i in range(n)]
-
-    # Etiquetas de tiempo
-    if hora and minutos and len(hora) >= n and len(minutos) >= n:
-        etiquetas = [f"{int(hora[i]):02d}:{int(minutos[i]):02d}" for i in range(n)]
-        x = list(range(n))
-        xticks = x
-        xticklabels = etiquetas
-    else:
-        x = list(range(n))
-        xticks = x
-        xticklabels = [str(i + 1) for i in x]
-
-    # --- Gráfico ---
+    import numpy as np
+    from scipy.interpolate import make_interp_spline
     fig, ax = plt.subplots(figsize=(10, 4))
 
-    # Cuadrícula suave y eje desde 0
+    n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
+    x = np.arange(n)
+
+    # Convertir a valores numéricos seguros
+    def to_float_list(lst):
+        vals = []
+        for v in lst:
+            try:
+                vals.append(float(v))
+            except:
+                vals.append(np.nan)
+        return vals
+
+    y_sis = to_float_list(sistolica)
+    y_dia = to_float_list(diastolica)
+    y_ppm = to_float_list(ppm)
+    y_pam = to_float_list(pam)
+
+    # Etiquetas de tiempo
+    if hora and minutos and len(hora) == len(sistolica):
+        etiquetas_tiempo = [f"{int(h):02d}:{int(m):02d}" for h, m in zip(hora, minutos)]
+        ax.set_xticks(x)
+        ax.set_xticklabels(etiquetas_tiempo, rotation=45)
+        ax.set_xlabel("Hora de medición")
+    else:
+        ax.set_xlabel("Muestra")
+
+    # --- Cuadrícula y límites ---
     ax.grid(True, linestyle="--", linewidth=0.5, color="lightgray", alpha=0.7)
     ax.set_ylim(bottom=0)
 
-    # Líneas de presión sistólica y diastólica
-    ax.plot(x, y_sis, marker='o', label='Sistólica', color='red', linewidth=2)
-    ax.plot(x, y_dia, marker='o', label='Diastólica', color='blue', linewidth=2)
+    # --- Área sombreada PP con contorno ---
+    x_valid = np.array([xi for xi, s, d in zip(x, y_sis, y_dia) if not np.isnan(s) and not np.isnan(d)])
+    y_sis_valid = np.array([s for s in y_sis if not np.isnan(s)])
+    y_dia_valid = np.array([d for d in y_dia if not np.isnan(d)])
+    if len(x_valid) > 1:
+        ax.fill_between(x_valid, y_dia_valid, y_sis_valid, color='lightcoral', alpha=0.25, label='PP (Presión de Pulso)')
+        ax.plot(x_valid, y_sis_valid, color='red', alpha=0.3, linewidth=1.2)  # contorno superior
+        ax.plot(x_valid, y_dia_valid, color='darkred', alpha=0.3, linewidth=1.2)  # contorno inferior
 
-    # --- PP: línea negra entre sistólica y diastólica ---
-    for xi, s, d in zip(x, y_sis, y_dia):
-        if not math.isnan(s) and not math.isnan(d):
-            ax.vlines(xi, d, s, color="black", linewidth=2, label='_nolegend_')  # No repite en leyenda
+    # --- Sistólica y Diastólica: puntos sobre el área ---
+    ax.scatter(x, y_sis, color='red', marker='o', s=60, label='Sistólica')
+    ax.scatter(x, y_dia, color='darkred', marker='o', s=60, label='Diastólica')
 
-    # PAM y PPM como líneas conectadas
-    ax.plot(x, y_pam, marker='s', color='purple', linewidth=1.8, label='PAM')
-    ax.plot(x, y_ppm, marker='x', color='green', linewidth=1.8, label='PPM')
+    # --- PAM y PPM como curvas suaves ---
+    def smooth_curve(x, y, color, marker, label):
+        x_s = np.array([xi for xi, yi in zip(x, y) if not np.isnan(yi)])
+        y_s = np.array([yi for yi in y if not np.isnan(yi)])
+        if len(x_s) > 3:
+            x_smooth = np.linspace(x_s.min(), x_s.max(), 200)
+            spline = make_interp_spline(x_s, y_s, k=3)
+            y_smooth = spline(x_smooth)
+            ax.plot(x_smooth, y_smooth, color=color, linewidth=1.8)
+            ax.scatter(x_s, y_s, color=color, marker=marker)
+        else:
+            ax.plot(x_s, y_s, color=color, linewidth=1.8, marker=marker, label=label)
 
-    # Etiquetas y formato
-    ax.set_xlabel("Hora de medición" if hora and minutos else "Muestra")
+    smooth_curve(x, y_pam, color='purple', marker='s', label='PAM')
+    smooth_curve(x, y_ppm, color='green', marker='x', label='PPM')
+
+    # --- Formato general ---
     ax.set_ylabel("Valor (mmHg / PPM)")
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(xticklabels, rotation=45)
     ax.set_title("Gráfico de Tendencias")
 
-    # --- Leyenda completa, arriba centrada ---
+    # --- Leyenda arriba centrada ---
     legend_labels = [
-        plt.Line2D([], [], color='red', marker='o', label='Sistólica', linewidth=2),
-        plt.Line2D([], [], color='blue', marker='o', label='Diastólica', linewidth=2),
-        plt.Line2D([], [], color='black', linewidth=2, label='PP (Presión de Pulso)'),
+        plt.Line2D([], [], color='red', marker='o', linestyle='None', label='Sistólica'),
+        plt.Line2D([], [], color='darkred', marker='o', linestyle='None', label='Diastólica'),
+        plt.Line2D([], [], color='lightcoral', linewidth=8, alpha=0.25, label='PP (Presión de Pulso)'),
         plt.Line2D([], [], color='purple', marker='s', label='PAM', linewidth=1.8),
         plt.Line2D([], [], color='green', marker='x', label='PPM', linewidth=1.8)
     ]
@@ -118,8 +134,6 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode('utf-8')
-
-
 
 
 # Función para calcular resumen: Max, Min, Media, Desvío
