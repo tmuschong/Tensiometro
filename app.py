@@ -1,4 +1,6 @@
 from flask import Flask, request, jsonify, send_file
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
