@@ -81,10 +81,7 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     fig, ax = plt.subplots(figsize=(10,4))
 
     # Área sombreada entre sistólica y diastólica
-    ax.fill_between(x, y_dia, y_sis, color='lightgrey', alpha=0.4, label='Rango S-D')
-
-    # Línea de PP sobre el área sombreada
-    ax.plot(x, y_pp, color='black', linewidth=2, label='PP (S-D)')
+    ax.fill_between(x, y_dia, y_sis, color='lightgrey', alpha=0.4, label='PP')
 
     # Puntos de sistólica y diastólica (sin línea)
     ax.scatter(x, y_sis, color='red', marker='o', s=60, label='Sistólica')
