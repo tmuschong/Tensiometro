@@ -57,6 +57,7 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     y_ppm = [v_at(ppm, i) for i in range(n)]
     y_pam = [v_at(pam, i) for i in range(n)]
 
+    # Etiquetas de tiempo
     if hora and minutos and len(hora) >= n and len(minutos) >= n:
         etiquetas = [f"{int(hora[i]):02d}:{int(minutos[i]):02d}" for i in range(n)]
         x = list(range(n))
@@ -65,27 +66,42 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     else:
         x = list(range(n))
         xticks = x
-        xticklabels = [str(i+1) for i in x]
+        xticklabels = [str(i + 1) for i in x]
 
-    fig, ax = plt.subplots(figsize=(10,4))
-    ax.plot(x, y_sis, marker='o', label='Sistólica', linewidth=2)
-    ax.plot(x, y_dia, marker='o', label='Diastólica', linewidth=2)
-    ax.scatter(x, y_ppm, label='PPM', marker='x', s=60)
-    ax.scatter(x, y_pam, label='PAM', marker='s', s=50)
+    # --- Gráfico ---
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(x, y_sis, marker='o', label='Sistólica', color='red', linewidth=2)
+    ax.plot(x, y_dia, marker='o', label='Diastólica', color='blue', linewidth=2)
+    ax.scatter(x, y_ppm, label='PPM', color='green', marker='x', s=60)
+    ax.scatter(x, y_pam, label='PAM', color='purple', marker='s', s=50)
 
+    # --- Configuración de ejes ---
     ax.set_xlabel("Hora de medición" if hora and minutos else "Muestra")
     ax.set_ylabel("Valor (mmHg / PPM)")
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticklabels, rotation=45)
-    ax.set_title("Evolución: Sistólica / Diastólica / PPM / PAM")
-    ax.legend(loc='upper left')
+    ax.set_ylim(bottom=0)  # ✅ eje Y comienza en 0
 
-    plt.tight_layout()
+    # --- Cuadrícula suave ---
+    ax.grid(True, which='major', linestyle='--', color='gray', alpha=0.2)
+
+    # --- Título ---
+    ax.set_title("Evolución: Sistólica / Diastólica / PPM / PAM")
+
+    # --- Leyenda fuera del gráfico ---
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.12),
+               ncol=4, fontsize=9, frameon=False)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])  # deja espacio arriba para la leyenda
+
+    # --- Exportar como base64 ---
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format='png', dpi=120)
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode('utf-8')
+
 
 # Función para calcular resumen: Max, Min, Media, Desvío
 def calcular_resumen(valores):
