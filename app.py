@@ -1,6 +1,4 @@
 from flask import Flask, request, jsonify, send_file
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 import base64
@@ -19,22 +17,22 @@ datos_esp = {
     "sistolica": [],
     "diastolica": [],
     "ppm": [],
+    "pam": [],
     "hora": [],
     "minutos": [],
-    "pam": [],        
     "dia": [],
     "mes": [],
     "ano": []
 }
 
-# Helper: obtener valor seguro (evita IndexError)
+# Helper: obtener valor seguro
 def safe_get(lst, i, default=None):
     try:
         return lst[i]
     except Exception:
         return default
 
-# convierte lista de valores a floats cuando sea posible
+# Convierte lista de valores a floats
 def to_numeric_list(lst):
     res = []
     for v in lst:
@@ -44,91 +42,69 @@ def to_numeric_list(lst):
             pass
     return res
 
-# Genera gráfico combinado
+# ---------------------------
+# Gráfico combinado actualizado
+# ---------------------------
 def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minutos=None):
-    import numpy as np
-    from scipy.interpolate import make_interp_spline
-    fig, ax = plt.subplots(figsize=(10, 4))
-
     n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
-    x = np.arange(n)
 
-    # Convertir a valores numéricos seguros
-    def to_float_list(lst):
-        vals = []
-        for v in lst:
-            try:
-                vals.append(float(v))
-            except:
-                vals.append(np.nan)
-        return vals
+    def v_at(lst, i):
+        try:
+            return float(lst[i])
+        except Exception:
+            return math.nan
 
-    y_sis = to_float_list(sistolica)
-    y_dia = to_float_list(diastolica)
-    y_ppm = to_float_list(ppm)
-    y_pam = to_float_list(pam)
+    y_sis = [v_at(sistolica, i) for i in range(n)]
+    y_dia = [v_at(diastolica, i) for i in range(n)]
+    y_ppm = [v_at(ppm, i) for i in range(n)]
+    y_pam = [v_at(pam, i) for i in range(n)]
 
-    # Etiquetas de tiempo
-    if hora and minutos and len(hora) == len(sistolica):
-        etiquetas_tiempo = [f"{int(h):02d}:{int(m):02d}" for h, m in zip(hora, minutos)]
-        ax.set_xticks(x)
-        ax.set_xticklabels(etiquetas_tiempo, rotation=45)
-        ax.set_xlabel("Hora de medición")
+    # Calcular PP = S - D
+    y_pp = []
+    for s,d in zip(y_sis, y_dia):
+        try:
+            y_pp.append(s-d)
+        except:
+            y_pp.append(math.nan)
+
+    # Eje X
+    if hora and minutos and len(hora) >= n and len(minutos) >= n:
+        etiquetas = [f"{int(hora[i]):02d}:{int(minutos[i]):02d}" for i in range(n)]
+        x = list(range(n))
+        xticks = x
+        xticklabels = etiquetas
     else:
-        ax.set_xlabel("Muestra")
+        x = list(range(n))
+        xticks = x
+        xticklabels = [str(i+1) for i in x]
 
-    # --- Cuadrícula y límites ---
-    ax.grid(True, linestyle="--", linewidth=0.5, color="lightgray", alpha=0.7)
+    fig, ax = plt.subplots(figsize=(10,4))
+
+    # Área sombreada entre sistólica y diastólica
+    ax.fill_between(x, y_dia, y_sis, color='lightgrey', alpha=0.4, label='Rango S-D')
+
+    # Línea de PP sobre el área sombreada
+    ax.plot(x, y_pp, color='black', linewidth=2, label='PP (S-D)')
+
+    # Puntos de sistólica y diastólica (sin línea)
+    ax.scatter(x, y_sis, color='red', marker='o', s=60, label='Sistólica')
+    ax.scatter(x, y_dia, color='blue', marker='o', s=60, label='Diastólica')
+
+    # Líneas de PPM y PAM con marcadores
+    ax.plot(x, y_ppm, color='green', linewidth=1, marker='x', markersize=6, label='PPM')
+    ax.plot(x, y_pam, color='purple', linewidth=1, marker='s', markersize=6, label='PAM')
+
+    ax.set_xlabel("Hora de medición" if hora and minutos else "Muestra")
+    ax.set_ylabel("Valor (mmHg / PPM)")
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticklabels, rotation=45)
     ax.set_ylim(bottom=0)
 
-    # --- Área sombreada PP con contorno ---
-    x_valid = np.array([xi for xi, s, d in zip(x, y_sis, y_dia) if not np.isnan(s) and not np.isnan(d)])
-    y_sis_valid = np.array([s for s in y_sis if not np.isnan(s)])
-    y_dia_valid = np.array([d for d in y_dia if not np.isnan(d)])
-    if len(x_valid) > 1:
-        ax.fill_between(x_valid, y_dia_valid, y_sis_valid, color='lightcoral', alpha=0.25, label='PP (Presión de Pulso)')
-        ax.plot(x_valid, y_sis_valid, color='red', alpha=0.3, linewidth=1.2)  # contorno superior
-        ax.plot(x_valid, y_dia_valid, color='darkred', alpha=0.3, linewidth=1.2)  # contorno inferior
+    # Cuadrícula gris suave
+    ax.grid(True, linestyle='--', color='lightgrey', alpha=0.6)
 
-    # --- Sistólica y Diastólica: puntos sobre el área ---
-    ax.scatter(x, y_sis, color='red', marker='o', s=60, label='Sistólica')
-    ax.scatter(x, y_dia, color='darkred', marker='o', s=60, label='Diastólica')
-
-    # --- PAM y PPM como curvas suaves ---
-    def smooth_curve(x, y, color, marker, label):
-        x_s = np.array([xi for xi, yi in zip(x, y) if not np.isnan(yi)])
-        y_s = np.array([yi for yi in y if not np.isnan(yi)])
-        if len(x_s) > 3:
-            x_smooth = np.linspace(x_s.min(), x_s.max(), 200)
-            spline = make_interp_spline(x_s, y_s, k=3)
-            y_smooth = spline(x_smooth)
-            ax.plot(x_smooth, y_smooth, color=color, linewidth=1.8)
-            ax.scatter(x_s, y_s, color=color, marker=marker)
-        else:
-            ax.plot(x_s, y_s, color=color, linewidth=1.8, marker=marker, label=label)
-
-    smooth_curve(x, y_pam, color='purple', marker='s', label='PAM')
-    smooth_curve(x, y_ppm, color='green', marker='x', label='PPM')
-
-    # --- Formato general ---
-    ax.set_ylabel("Valor (mmHg / PPM)")
-    ax.set_title("Gráfico de Tendencias")
-
-    # --- Leyenda arriba centrada ---
-    legend_labels = [
-        plt.Line2D([], [], color='red', marker='o', linestyle='None', label='Sistólica'),
-        plt.Line2D([], [], color='darkred', marker='o', linestyle='None', label='Diastólica'),
-        plt.Line2D([], [], color='lightcoral', linewidth=8, alpha=0.25, label='PP (Presión de Pulso)'),
-        plt.Line2D([], [], color='purple', marker='s', label='PAM', linewidth=1.8),
-        plt.Line2D([], [], color='green', marker='x', label='PPM', linewidth=1.8)
-    ]
-    ax.legend(
-        handles=legend_labels,
-        loc='upper center',
-        bbox_to_anchor=(0.5, 1.20),
-        ncol=5,
-        frameon=False
-    )
+    # Leyenda centrada arriba
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.25), ncol=3, frameon=False, fontsize=9)
 
     plt.tight_layout()
     buf = io.BytesIO()
@@ -153,8 +129,6 @@ def recibir_datos():
     global datos_esp
     try:
         data = request.get_json()
-
-        # ✅ Reemplaza completamente los datos anteriores
         datos_esp = {
             'sistolica': data.get('sistolica', []),
             'diastolica': data.get('diastolica', []),
@@ -166,21 +140,18 @@ def recibir_datos():
             'mes': data.get('mes', []),
             'ano': data.get('ano', [])
         }
-
         print(f"[Flask] Datos recibidos ({len(datos_esp['sistolica'])} muestras)")
         return jsonify({"status": "ok", "mensaje": "Datos reemplazados correctamente"}), 200
-
     except Exception as e:
         print(f"[Error] {e}")
         return jsonify({"status": "error", "mensaje": str(e)}), 400
-
 
 # Endpoint GET: ver datos en navegador (debug)
 @app.route("/data_get", methods=["GET"])
 def ver_datos():
     return jsonify(datos_esp)
 
-# Página principal (form + muestra)
+# Página principal
 @app.route("/", methods=["GET", "POST"])
 def home():
     if request.method == "POST":
@@ -193,33 +164,33 @@ def home():
         sistolica = datos_esp.get("sistolica", [])
         diastolica = datos_esp.get("diastolica", [])
         ppm = datos_esp.get("ppm", [])
+        pam = datos_esp.get("pam", [])
         hora = datos_esp.get("hora", [])
         minutos = datos_esp.get("minutos", [])
-        pam = datos_esp.get("pam", [])
         dia = datos_esp.get("dia", [])
         mes = datos_esp.get("mes", [])
         ano = datos_esp.get("ano", [])
 
+        # Calcular PP y DP
         n = max(len(sistolica), len(diastolica), len(ppm), len(pam))
         pp = []
         dp = []
         for i in range(n):
-            s = safe_get(sistolica, i, None)
-            d = safe_get(diastolica, i, None)
-            p = safe_get(ppm, i, None)
-            try: s_f = float(s)
+            try: s_f = float(sistolica[i])
             except: s_f = None
-            try: d_f = float(d)
+            try: d_f = float(diastolica[i])
             except: d_f = None
-            try: p_f = float(p)
+            try: p_f = float(ppm[i])
             except: p_f = None
             pp.append(s_f - d_f if (s_f is not None and d_f is not None) else None)
             dp.append(s_f * p_f if (s_f is not None and p_f is not None) else None)
 
         img_comb = generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora, minutos)
 
+        # Resúmenes
         indices_diurno = [i for i,h in enumerate(hora) if isinstance(h, (int,float)) and 7 <= h < 22]
         indices_nocturno = [i for i,h in enumerate(hora) if isinstance(h, (int,float)) and (h < 7 or h >= 22)]
+
         def extraer_lista(indices, lista):
             return [lista[i] for i in indices if i < len(lista) and isinstance(lista[i], (int,float))]
 
@@ -234,6 +205,7 @@ def home():
         resumen_diurno = {k: calcular_resumen(extraer_lista(indices_diurno, v)) for k,v in zip(resumen_total.keys(), [sistolica, diastolica, pam, ppm, pp, dp])}
         resumen_nocturno = {k: calcular_resumen(extraer_lista(indices_nocturno, v)) for k,v in zip(resumen_total.keys(), [sistolica, diastolica, pam, ppm, pp, dp])}
 
+        # Generar HTML de tabla resumen
         def generar_tabla_html(resumen, titulo):
             filas = ""
             for clave, valores in resumen.items():
@@ -242,12 +214,14 @@ def home():
 
         html_resumen = generar_tabla_html(resumen_total, "Total") + generar_tabla_html(resumen_diurno, "Diurno") + generar_tabla_html(resumen_nocturno, "Nocturno")
 
+        # Tabla de valores
         filas = ""
         for i in range(n):
             hora_str = f"{int(hora[i]):02d}:{int(minutos[i]):02d}" if (i < len(hora) and i < len(minutos) and isinstance(hora[i], (int,float)) and isinstance(minutos[i], (int,float))) else (safe_get(hora,i,""))
             fecha_str = f"{int(dia[i]):02d}/{int(mes[i]):02d}/{int(ano[i])}" if (i < len(dia) and i < len(mes) and i < len(ano) and isinstance(dia[i], (int,float)) and isinstance(mes[i], (int,float)) and isinstance(ano[i], (int,float))) else ""
             filas += f"<tr><td>{i+1}</td><td>{safe_get(sistolica,i,'')}</td><td>{safe_get(diastolica,i,'')}</td><td>{safe_get(pam,i,'')}</td><td>{safe_get(ppm,i,'')}</td><td>{safe_get(pp,i,'')}</td><td>{safe_get(dp,i,'')}</td><td>{hora_str}</td><td>{fecha_str}</td></tr>"
 
+        # Promedios
         def mean_or_dash(lst):
             vals = []
             for v in lst:
@@ -295,9 +269,7 @@ def home():
             <h2>Gráfico de Tendencias</h2>
             <img src="data:image/png;base64,{img_comb}">
         </div>
-
         {html_resumen}
-
         <table>
             <tr><th>N°</th><th>Sistólica</th><th>Diastólica</th><th>PAM</th><th>PPM</th><th>PP (S-D)</th><th>DP (S×PPM)</th><th>Hora</th><th>Fecha</th></tr>
             {filas}
@@ -396,6 +368,7 @@ def exportar_pdf():
         elementos.append(RLImage(ruta_comb, width=500, height=200))
         elementos.append(Spacer(1,12))
 
+    # Calcular PP y DP
     pp = [s-d for s,d in zip(sistolica, diastolica)]
     dp = [s*p for s,p in zip(sistolica, ppm)]
     indices_diurno = [i for i,h in enumerate(hora) if 7 <= h < 22]
@@ -478,5 +451,7 @@ def exportar_pdf():
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name="informe_presion.pdf", mimetype='application/pdf')
 
+
 if __name__ == "__main__":
     app.run(debug=True)
+
