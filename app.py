@@ -60,12 +60,7 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
     y_pam = [v_at(pam, i) for i in range(n)]
 
     # Calcular PP = S - D
-    y_pp = []
-    for s,d in zip(y_sis, y_dia):
-        try:
-            y_pp.append(s-d)
-        except:
-            y_pp.append(math.nan)
+    y_pp = [s - d if not math.isnan(s) and not math.isnan(d) else math.nan for s, d in zip(y_sis, y_dia)]
 
     # Eje X
     if hora and minutos and len(hora) >= n and len(minutos) >= n:
@@ -78,37 +73,50 @@ def generar_grafico_combinado(sistolica, diastolica, ppm, pam, hora=None, minuto
         xticks = x
         xticklabels = [str(i+1) for i in x]
 
-    fig, ax = plt.subplots(figsize=(10,4))
+    # 🔸 Escalamos el tamaño del gráfico según la cantidad de puntos
+    ancho = max(10, n * 0.15)  # cada punto agrega algo de ancho
+    fig, ax = plt.subplots(figsize=(ancho, 5))
 
     # Área sombreada entre sistólica y diastólica
     ax.fill_between(x, y_dia, y_sis, color='lightgrey', alpha=0.4, label='PP')
 
-    # Puntos de sistólica y diastólica (sin línea)
-    ax.scatter(x, y_sis, color='red', marker='o', s=60, label='Sistólica')
-    ax.scatter(x, y_dia, color='blue', marker='o', s=60, label='Diastólica')
+    # 🔸 Marcadores más pequeños si hay muchas muestras
+    if n > 60:
+        size_sis_dia = 25
+        size_ppm_pam = 4
+    elif n > 30:
+        size_sis_dia = 40
+        size_ppm_pam = 5
+    else:
+        size_sis_dia = 60
+        size_ppm_pam = 6
 
-    # Líneas de PPM y PAM con marcadores
-    ax.plot(x, y_ppm, color='green', linewidth=1, marker='x', markersize=6, label='PPM')
-    ax.plot(x, y_pam, color='purple', linewidth=1, marker='s', markersize=6, label='PAM')
+    # Puntos sistólica y diastólica
+    ax.scatter(x, y_sis, color='red', marker='o', s=size_sis_dia, label='Sistólica')
+    ax.scatter(x, y_dia, color='blue', marker='o', s=size_sis_dia, label='Diastólica')
+
+    # Líneas PPM y PAM
+    ax.plot(x, y_ppm, color='green', linewidth=1, marker='x', markersize=size_ppm_pam, label='PPM')
+    ax.plot(x, y_pam, color='purple', linewidth=1, marker='s', markersize=size_ppm_pam, label='PAM')
 
     ax.set_xlabel("Hora de medición" if hora and minutos else "Muestra")
     ax.set_ylabel("Valor (mmHg / PPM)")
     ax.set_xticks(xticks)
-    ax.set_xticklabels(xticklabels, rotation=45)
-    ax.set_ylim(bottom=0)
+    ax.set_xticklabels(xticklabels, rotation=45, fontsize=8)
 
-    # Cuadrícula gris suave
+    ax.set_ylim(bottom=0)
     ax.grid(True, linestyle='--', color='lightgrey', alpha=0.6)
 
     # Leyenda centrada arriba
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.25), ncol=3, frameon=False, fontsize=9)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.25), ncol=4, frameon=False, fontsize=8)
 
     plt.tight_layout()
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)  # 🔸 mayor resolución
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode('utf-8')
+
 
 
 # Función para calcular resumen: Max, Min, Media, Desvío
